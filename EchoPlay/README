@@ -9,7 +9,7 @@ Via Curl:
 curl -v -H"Content-Type: application/json" -XPOST http://localhost:9000/reactiveprogramming/sendecho -d @echoPayload.json
 
 Via Apache Bench:
-/usr/sbin/ab2 -T "application/json" -p echoPayload.json -n500000 -c 50 http://localhost:8080/reactiveprogramming/sendecho
+/usr/sbin/ab2 -T "application/json" -p echoPayload.json -n500000 -c 50 http://localhost:9000/reactiveprogramming/sendecho
 
 The -n value changes the total number of messages pushed per run.
 The -c value changes the number of attempted concurrent connections.
