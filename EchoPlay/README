@@ -1,0 +1,143 @@
+To run the example:
+
+Start the server via:
+./activator start
+
+Test:
+
+Via Curl:
+curl -v -H"Content-Type: application/json" -XPOST http://localhost:9000/reactiveprogramming/sendecho -d @echoPayload.json
+
+Via Apache Bench:
+/usr/sbin/ab2 -T "application/json" -p echoPayload.json -n500000 -c 50 http://localhost:8080/reactiveprogramming/sendecho
+
+The -n value changes the total number of messages pushed per run.
+The -c value changes the number of attempted concurrent connections.
+
+I've tested C values up to 10000 on my laptop.  Read on for an opine on C values and what they mean to us.
+
+The C value opine:
+
+Think of your typical highway (with cars and trucks and stuff).  The road itself has a fixed width and a number of lanes.  During rush hour the number of cars increases and the system starts to slow down.  Well, from the point of view of the person in the car things get slower.  Your latency goes up.  However, the road is also handling many more cars per mile than it does in the middle of the night.  If you were toll bridge operator, you don't really care about how long someone is in traffic, you only care about how many paying customers you can shove over the bridge.
+
+This is what happens when you tweak the C value.  The system you're running on only has so much total capacity.  You'll be bound by something, whether it be network bandwidth, memory IO, disk IO, whatever.  When you get close to 100% system utilization you end up having to pick between total throughput and individual latency.
+
+Here are some example AB runs on my laptop:
+
+The first is at a reasonably low C value.  Say 8 (because I have an 8 core virtualized environment):
+
+Concurrency Level:      8
+Time taken for tests:   117.402 seconds
+Complete requests:      500000
+Failed requests:        0
+Write errors:           0
+Total transferred:      65000000 bytes
+Total POSTed:           106000000
+HTML transferred:       22000000 bytes
+Requests per second:    4258.87 [#/sec] (mean)
+Time per request:       1.878 [ms] (mean)
+Time per request:       0.235 [ms] (mean, across all concurrent requests)
+Transfer rate:          540.68 [Kbytes/sec] received
+                        881.72 kb/s sent
+                        1422.40 kb/s total
+Percentage of the requests served within a certain time (ms)
+  50%      2
+  66%      2
+  75%      2
+  80%      2
+  90%      2
+  95%      3
+  98%      4
+  99%      6
+ 100%    107 (longest request)
+
+In this example requests (cars) fly along the freeway in lanes that are very wide.  But cars going fast is only part of the picture.  What if you wanted to maximize your number of cars and not the speed of any one car?
+
+We increase C in this case and see something different:
+
+Concurrency Level:      500
+Time taken for tests:   90.731 seconds
+Complete requests:      500000
+Failed requests:        0
+Write errors:           0
+Total transferred:      65015600 bytes
+Total POSTed:           106025440
+HTML transferred:       22005280 bytes
+Requests per second:    5510.82 [#/sec] (mean)
+Time per request:       90.731 [ms] (mean)
+Time per request:       0.181 [ms] (mean, across all concurrent requests)
+Transfer rate:          699.78 [Kbytes/sec] received
+                        1141.18 kb/s sent
+                        1840.97 kb/s total
+Percentage of the requests served within a certain time (ms)
+  50%     84
+  66%     89
+  75%     94
+  80%     96
+  90%    106
+  95%    123
+  98%    138
+  99%    148
+ 100%   3139 (longest request)
+
+In this case we were able to get more out of our total system.  Our total number of requests per second went up, our total processing time went down.  But...our average latency went from 1.8ms to 90.7ms.  That's a huge jump in relative wait time.  As we attempt to squeeze more and more out of our system the system is unable to spend as much time focused on any one request.  You can push more total volume, but your road starts to back up and the cars slow down.
+
+Eventually you saturate your system and higher values of C aren't able to help you improve volume flow (yet you still pay the latency cost):
+
+Concurrency Level:      1000
+Time taken for tests:   89.336 seconds
+Complete requests:      500000
+Failed requests:        0
+Write errors:           0
+Total transferred:      65031720 bytes
+Total POSTed:           106051728
+HTML transferred:       22010736 bytes
+Requests per second:    5596.84 [#/sec] (mean)
+Time per request:       178.672 [ms] (mean)
+Time per request:       0.179 [ms] (mean, across all concurrent requests)
+Transfer rate:          710.88 [Kbytes/sec] received
+                        1159.29 kb/s sent
+                        1870.17 kb/s total
+Percentage of the requests served within a certain time (ms)
+  50%    169
+  66%    178
+  75%    187
+  80%    192
+  90%    208
+  95%    221
+  98%    237
+  99%    248
+ 100%   3211 (longest request)
+
+There are limits however.  Eventually the cost of the concurrency mechanism itself becomes a drain on performance.
+
+Concurrency Level:      10000
+Time taken for tests:   92.668 seconds
+Complete requests:      500000
+Failed requests:        0
+Write errors:           0
+Total transferred:      65496730 bytes
+Total POSTed:           106810052
+HTML transferred:       22168124 bytes
+Requests per second:    5395.58 [#/sec] (mean)
+Time per request:       1853.368 [ms] (mean)
+Time per request:       0.185 [ms] (mean, across all concurrent requests)
+Transfer rate:          690.22 [Kbytes/sec] received
+                        1125.59 kb/s sent
+                        1815.81 kb/s total
+Percentage of the requests served within a certain time (ms)
+  50%   1813
+  66%   1843
+  75%   1869
+  80%   1888
+  90%   1979
+  95%   2160
+  98%   2292
+  99%   2368
+ 100%   4853 (longest request)
+
+At this point, on this system, the system is spending enough time trying to provide concurrency that not only is latency high, the total volume processed has gone down (although this total is still higher than our first underutilized case).
+
+I'm very happy with the behavior of this system.  It behaves exactly as one would expect on paper and *it didn't crash*.  Many systems have a very hard time under high C values.  System instability and craches are common.  I'd love to compare these characteristics with those of other frameworks.  In the end this was a valuable learning experience.
+
+-Jim 
